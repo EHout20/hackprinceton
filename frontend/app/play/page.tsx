@@ -522,6 +522,7 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const captureCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const displayCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const targetPoseRef = React.useRef<string | undefined>(targetPose);
   const landmarksRef = React.useRef<any[] | null>(null);
   const smoothedRef = React.useRef<any[] | null>(null);
   const drawLoopRef = React.useRef<number | null>(null);
@@ -533,6 +534,12 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
   const confirmedPulseRef = React.useRef<number | null>(null);
   const [lastLandmarkCount, setLastLandmarkCount] = React.useState<number | null>(null);
   const [lastServerMsg, setLastServerMsg] = React.useState<string | null>(null);
+
+  useEffect(() => {
+    targetPoseRef.current = targetPose;
+    setProgress(0);
+    if (onProgressChange) onProgressChange(0);
+  }, [targetPose, onProgressChange]);
 
   // connections between keypoints (approximate MediaPipe indices)
   const CONNECTIONS: Array<[number, number]> = [
@@ -621,8 +628,9 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
             if (lsh && rsh && lwr && rwr) {
               const shoulderWidth = Math.max(1, Math.abs(rsh.x - lsh.x));
               const torsoCenterX = (lsh.x + rsh.x) / 2;
+              const activePose = targetPoseRef.current;
               // If the current target pose is Y-Pose, compute a Y-specific progress metric
-              if (targetPose === "Y-Pose") {
+              if (activePose === "Y-Pose") {
                 const shoulderY = (lsh.y + rsh.y) / 2;
                 // helper: angle between shoulder->wrist and vertical (degrees)
                 const angleDeg = (shoulder: any, wrist: any) => {
@@ -651,7 +659,7 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
                 const angleScore = Math.min(leftScore, rightScore);
                 const prog = above && outward ? angleScore : angleScore * 0.45; // penalize if not clearly above/outward
                 progressRef.v = Math.max(0, Math.min(1, prog));
-                } else if (targetPose === "OMG") {
+                } else if (activePose === "OMG") {
                 // "OMG" = hands over the head: wrists above the head/nose and fairly close together
                 const noseRaw = lm[0];
                 if (noseRaw && lwr && rwr) {
@@ -675,7 +683,7 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
                 } else {
                   progressRef.v = 0;
                 }
-              } else if (targetPose === "Arms Down") {
+              } else if (activePose === "Arms Down") {
                   // Arms Down per-frame progress: measure how close wrists are to hip level
                   const lhipRaw = lm[23];
                   const rhipRaw = lm[24];
@@ -993,7 +1001,8 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
   };
 
   const detectTargetPose = (landmarks: any[]) => {
-    if (!targetPose || targetPose === "T-Pose") {
+    const poseName = targetPoseRef.current;
+    if (!poseName || poseName === "T-Pose") {
       // require keypoints: L/R shoulders (11/12), L/R elbows (13/14), L/R wrists (15/16)
       const idx = { LSH: 11, RSH: 12, LEL: 13, REL: 14, LWR: 15, RWR: 16 };
       const needed = [11, 12, 13, 14, 15, 16];
@@ -1031,7 +1040,7 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
   return condElbows && condWrists && condWristX && condWristLevel;
     }
     // L-Pose: one arm down alongside the body, the other arm extended horizontally
-    if (targetPose === "L-Pose") {
+    if (poseName === "L-Pose") {
       // require keypoints: L/R shoulders (11/12), L/R elbows (13/14), L/R wrists (15/16), hips (23/24)
       const needed = [11, 12, 13, 14, 15, 16, 23, 24];
       for (const i of needed) if (!landmarks[i]) return false;
@@ -1073,7 +1082,7 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
     }
 
   // Y-Pose: both arms raised diagonally up (roughly 10-50 degrees from vertical; centered ~30°)
-    if (targetPose === "Y-Pose") {
+    if (poseName === "Y-Pose") {
       // require keypoints: L/R shoulders (11/12), L/R elbows (13/14), L/R wrists (15/16)
       const needed = [11, 12, 13, 14, 15, 16];
       for (const i of needed) if (!landmarks[i]) return false;
@@ -1124,7 +1133,7 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
     }
 
     // OMG: hands over the head (both wrists above the head/nose and fairly close together)
-    if (targetPose === "OMG") {
+    if (poseName === "OMG") {
       const needed = [0, 11, 12, 15, 16]; // nose, shoulders, wrists
       for (const i of needed) if (!landmarks[i]) return false;
       const nose = landmarks[0];
