@@ -1,0 +1,27 @@
+# Repository-level ignores
+
+# Frontend build & node modules
+/frontend/node_modules/
+/frontend/.next/
+/frontend/out/
+
+# Backend virtualenv
+/backend/.venv/
+/backend/venv/
+
+# general
+.DS_Store
+.vscode/
+.idea/
+
+# logs
+npm-debug.log*
+*.log
+
+# env
+.env
+.env.local
+
+# caches
+.cache/
+
