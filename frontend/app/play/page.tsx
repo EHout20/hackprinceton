@@ -18,9 +18,8 @@ import {
 export default function PlayPage() {
   const [name, setName] = useState("");
 
-  // pose cycle state: only use the four implemented poses to avoid selecting poses
-  // that don't have detection logic. Order: Arms Down, Y-Pose, T-Pose, OMG
-  const POSES = ["Arms Down", "Y-Pose", "T-Pose", "OMG"];
+  // pose cycle state: only use the poses that currently have detection logic.
+  const POSES = ["Arms Down", "Y-Pose", "T-Pose"];
   const [currentPoseIdx, setCurrentPoseIdx] = useState(() => Math.floor(Math.random() * POSES.length));
   // boolean flag that indicates the round ended and we should update to a new pose
   const [poseNeedsUpdate, setPoseNeedsUpdate] = useState(false);
@@ -659,30 +658,6 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
                 const angleScore = Math.min(leftScore, rightScore);
                 const prog = above && outward ? angleScore : angleScore * 0.45; // penalize if not clearly above/outward
                 progressRef.v = Math.max(0, Math.min(1, prog));
-                } else if (activePose === "OMG") {
-                // "OMG" = hands over the head: wrists above the head/nose and fairly close together
-                const noseRaw = lm[0];
-                if (noseRaw && lwr && rwr) {
-                  const toPixels = (y: number) => (y <= 1 ? y * (disp ? disp.height : dispHeightEstimate()) : y);
-                  const headYpx = toPixels(noseRaw.y || 0);
-                  const lwYpx = toPixels(lwr.y || 0);
-                  const rwYpx = toPixels(rwr.y || 0);
-                  const avgWristY = (lwYpx + rwYpx) / 2;
-                  // vertical score: how much wrists are above head (positive when above)
-                  const vertRange = dispHeightEstimate() * 0.22; // sensitivity
-                  const vertScore = Math.max(0, Math.min(1, (headYpx - avgWristY + vertRange * 0.05) / vertRange));
-                  // closeness: how near the two wrists are horizontally (closer -> higher)
-                  const wristXpx = ((lwr.x || 0) <= 1 ? (lwr.x || 0) * (disp ? disp.width : 960) : (lwr.x || 0));
-                  const wristXrpx = ((rwr.x || 0) <= 1 ? (rwr.x || 0) * (disp ? disp.width : 960) : (rwr.x || 0));
-                  const wristDist = Math.abs(wristXrpx - wristXpx);
-                  const shoulderWidthPx = Math.max(1, Math.abs((rsh.x || 0) - (lsh.x || 0)) * (disp ? disp.width : 960));
-                  const closeness = Math.max(0, 1 - wristDist / Math.max(shoulderWidthPx * 0.8, 1));
-                  // require wrists be above head somewhat and reasonably close
-                  const prog = Math.max(0, Math.min(1, vertScore * 0.9 + closeness * 0.1));
-                  progressRef.v = prog;
-                } else {
-                  progressRef.v = 0;
-                }
               } else if (activePose === "Arms Down") {
                   // Arms Down per-frame progress: measure how close wrists are to hip level
                   const lhipRaw = lm[23];
@@ -1130,31 +1105,6 @@ function WebcamPosePanel({ targetPose, onProgressChange, confirmedPulseIdx }: { 
       const rightOut = (rwr.x || 0) > torsoCenterX + xThresh;
 
       return okLeftAngle && okRightAngle && leftAbove && rightAbove && leftOut && rightOut;
-    }
-
-    // OMG: hands over the head (both wrists above the head/nose and fairly close together)
-    if (poseName === "OMG") {
-      const needed = [0, 11, 12, 15, 16]; // nose, shoulders, wrists
-      for (const i of needed) if (!landmarks[i]) return false;
-      const nose = landmarks[0];
-      const lsh = landmarks[11];
-      const rsh = landmarks[12];
-      const lwr = landmarks[15];
-      const rwr = landmarks[16];
-
-      // normalized coordinates: smaller y = higher on screen
-      const avgWristY = ((lwr.y || 0) + (rwr.y || 0)) / 2;
-      const headY = nose.y || 0;
-      // require wrists to be clearly above the head/nose
-      const aboveMargin = 0.03; // ~3% of frame height
-      const condAbove = avgWristY + aboveMargin < headY;
-
-      // require wrists to be reasonably close horizontally (hands together)
-      const shoulderWidth = Math.abs((rsh.x || 0) - (lsh.x || 0)) || 1;
-      const wristDist = Math.abs((rwr.x || 0) - (lwr.x || 0));
-      const condClose = wristDist < shoulderWidth * 0.6;
-
-      return condAbove && condClose;
     }
 
     return false;
