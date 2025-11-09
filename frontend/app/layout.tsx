@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Hole In The Wall",
+  title: "Let's Hold It!",
   description: "Pose Matching Game",
 };
 
